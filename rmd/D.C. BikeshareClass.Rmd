@@ -1,0 +1,175 @@
+---
+title: "D.C Bikeshare Class Assignment"
+author: "Mark Fairchild"
+date: "11/5/2021"
+output: html_notebook
+---
+
+##Load Libraries
+
+Here I loaded a few libraries I will be needing
+```{r eval = FALSE, message = FALSE}
+library(tidyverse) 
+library(dsbox) 
+library(lubridate)
+library(janitor)
+```
+
+##Extra Section
+
+This entire section with both chunks was used for previous work on this data. It has no bearing on this particular file, but is kept here for the author's reference purpose only.
+```{r create_bikeshare_dataframe}
+# bike_share <- read_csv("C:/Users/markf/Downloads/DS 241/202109-capitalbikeshare-tripdata.csv")
+# bike_share_data <- bike_share 
+```
+
+```{r}
+# bike_share_data_sep1 <- bike_share_data %>%
+#   mutate(started_at = as.Date(started_at)) %>% # tryFormats = c("%Y-%m-%d", "%Y/%m/%d"))) we need this is hr/min/sec%>%
+#   mutate(ended_at = as.Date(ended_at))
+# #   filter(started_at < "2021-09-02 00:00:00") %>%
+# #  # arrange(started_at) 
+# #   arrange(desc(started_at))
+#  View(bike_share_data_sep1)
+```
+
+##Load and Clean Dataset
+
+This chunk imports the bike share data from csv file
+```{r create_bikeshare_dataframe2}
+df1 <- read_csv("U:/Data Science 241/202109-capitalbikeshare-tripdata.csv") %>%  clean_names
+#View(df1)
+```
+##Create histogram for September 1st 
+ **This entire section represents my attempt to create a histogram, it was not a succeful attmpt, so keep scorlling until you see the asterisks again. 
+ 
+   -Note: it often helps to hit the arrows on the column name "started at" in
+    order to get the data in the order of the bikes being rented out.
+
+Filtering out the data for a certain day (September 1st)
+```{r filter_sep1}
+# df2 <- df1 %>%
+#   filter(mday(started_at) == 1)
+#  
+# View(df2)
+```
+
+Create columns for the hour in which the ride started, and also the duration of the ride in seconds
+```{r new_variables}
+# df3 <- df2 %>% 
+#   mutate(hr=hour(started_at), dur=ended_at-started_at) %>%
+#   summarise(started_at, ended_at, hr, dur)
+# 
+# View(df3)
+```
+
+Here I would create a dataframe with each hour listed, and number of riders that took out a bike - those who returned one listed as a new variable "riders". This variable would contain the number of bikes that were in use during that hour. This variable would not be cummulative for the hours of the day.
+
+At a low level of thought, I was unsure how to write the code to make the above stated goal happen. Below is a code chunk that was my attempt to make it happen. The code does not do what I need it to do but I don't yet know what to change.
+```{r summareze_and_create_variable_"riders"}
+# df4 <- df3 %>%
+#   group_by(hr) %>%
+#   summarise(riders = nrow(hr)-nrow(grepl(ended_at, 2:00:00)))
+#    
+# View(df4)
+```
+This code chunk would make a histogram with the hour on the x axis, and the number of riders on the y axis. This would allow us to visualise ridership by hour.
+
+```{r visualise_data}
+# ggplot(data = df4) + 
+#   geom_histogram(mapping = aes(x = hr, y = riders)) +
+#   labs(
+#     x = "hour of the day",
+#     y = "number of riders"
+#   )
+
+```
+The following chunk prints out the average ride time for a particular day in Washington D.C.
+This was one of the goals of this file
+```{r average_ride_time}
+# df5 <- df3 %>%
+#   summarise(dur)
+# summary("dur")
+```
+Unfotunately this chunk does not perform what I want it to do.
+
+
+
+#Skuca's class work
+**This section represents the data transformation and subsequent ggplot that skufka showed us in class, however, the task is incomplete. There are several issues with the plot, including crowed scales, and problems with September 1 and 2 being labeled as "day == 1" and "day == 2" in the data frame. This is the same label given to October 1 and 2 data entries. There are October entries because some bikes were returned late
+
+  Thus, we were tasked with fixing these problems, which I did in the next section, with data frame 7.
+  
+Here is Skufca's work to get the data frame how we want it
+```{r create_usable_df}
+df6 <- df1 %>% 
+  select(rideable_type, start = started_at, end = ended_at) %>%
+  pivot_longer(cols =  start:end,  names_to = "type", values_to = "time")%>%
+  arrange(time) %>%
+  mutate(inc = case_when(
+    type == "start" ~ 1,
+    type == "end" ~ -1
+  ), riders = cumsum(inc)) %>%
+  mutate(day = mday(time)) 
+
+  #my addition
+ #  mutate(wday_num = case_when(
+ #    day == c("1", "8", "15", "22", "29") ~ 4,
+ #    day == c("2", "9", "16", "23", "30") ~ 5,
+ #    day == c("3", "10", "17", "24") ~ 6,
+ #    day == c("4", "11", "18", "25") ~ 7,
+ #    day == c("5", "12", "19", "26") ~ 1,
+ #    day == c("6", "13", "20", "27") ~ 2,
+ #    day == c("7", "14", "21", "28") ~ 3,
+ #  ))
+
+# View(df6)
+```
+
+
+can we plot over the entire month?
+yes, 
+
+this plot has the plots for the entire month. It has a few issues! These issues are outlined in the introduction of this section.
+
+```{r}
+df6 %>%
+  ggplot(aes(time, riders)) +
+  geom_point(size = .5, alpha = .02) +
+  facet_wrap(~day, scales="free_x", ncol = 7) 
+```
+##Fixing The Plot's Issues
+**Below is the work I did to resolve the problems with the table, this was the actual assignment from class
+
+This dataframe is very similar to the one Skufca made, however, I changed the day variable in the first mutate to day of year, so that October 1 and September 1 would have different values
+
+I then turned this day of the year variable to the amount of days elapsed since September 1 (starting with 1 day elapsed for the actual day of Sep 1)
+
+I then filtered the rows to only include the 30 days of September. This fixed the issue from the above plot with having multiple days plotted in the facets for days 1 and 2.
+```{r improved_df}
+df7 = df1 %>% 
+  select(rideable_type, start = started_at, end = ended_at) %>%
+  pivot_longer(cols =  start:end,  names_to = "type", values_to = "time")%>%
+  arrange(time) %>%
+  mutate(inc = case_when(
+    type == "start" ~ 1,
+    type == "end" ~ -1
+  ), riders = cumsum(inc)) %>%
+  mutate(day_of_year = yday(time)) %>%
+  mutate(day_since_sep1 = day_of_year-243) %>%
+  filter(day_since_sep1 == 1:30)
+
+# View(df7)
+```
+
+Here I plotted the data with the fix from the chunk above, I also included the scale_x_datetime function to have only the hour part of the POSIXct entries listed at each tic mark of each faceted plot. This cleaned up the x-axis nicely
+```{r improved_plot}
+df7 %>%
+  ggplot(aes(time, riders)) +
+  geom_point(size = .5, alpha = .2) +
+  facet_wrap(~day_since_sep1, scales="free_x", ncol = 7)  +
+  scale_x_datetime(labels = hour)
+```
+The number of riders at given times for given days in September can now be more easily studied with this new plot.
+
+
