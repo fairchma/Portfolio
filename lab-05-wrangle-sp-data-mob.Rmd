@@ -1,0 +1,269 @@
+---
+title: "A better answer to the Denny's question "
+subtitle: "Wrangling spatial data"
+author: "Mob 1"
+output: html_notebook
+---
+
+
+### Packages
+
+In this assignment we will use the **tidyverse** and **dsbox** packages.
+
+```{r eval = FALSE}
+library(tidyverse) 
+library(dsbox) 
+```
+
+## The data
+
+Here we are loading the data frames, as well as looking at  the dimensions of a few of them
+
+
+```{r create_dataframes}
+states <- read_csv("U:/data Science 241/states.csv")
+dn=dennys
+lq =laquinta
+ nrow(dennys)
+ nrow(laquinta)
+```
+
+# Going Through the Steps
+Step 1:
+Get all of lab 5 working, to include creating a function that takes a "state" as input and produces the output dataframe of distinces.
+
+Here we are loading in the haversine function for later use
+```{r create_haversine_function}
+haversine <- function(long1, lat1, long2, lat2, round = 3) {
+  # convert to radians
+  long1 = long1 * pi / 180
+  lat1  = lat1  * pi / 180
+  long2 = long2 * pi / 180
+  lat2  = lat2  * pi / 180
+  
+  R = 6371 # Earth mean radius in km
+  
+  a = sin((lat2 - lat1)/2)^2 + cos(lat1) * cos(lat2) * sin((long2 - long1)/2)^2
+  d = R * 2 * asin(sqrt(a))
+  
+  return( round(d,round) ) # distance in km
+}
+```
+
+Here is the function from lab 05. This function took a state as an input, and output a data frame that listed every Denny's location in a state, and listed the distance to the nearest LaQuinta from that Denny's.
+```{r create_function}
+map_mindist <- function(which_state) {
+#step i
+x = which_state
+
+dn_x <- dennys %>%
+filter(state == x)
+
+
+
+lq_x <- laquinta %>%
+filter(state == x)
+
+dn_lq_x <- full_join(dn_x, lq_x, by = "state") %>%
+mutate(distance = haversine(longitude.x, latitude.x, longitude.y, latitude.y, round = 1))
+
+dn_lq_x_mindist <- dn_lq_x %>%
+group_by(address.x) %>%
+summarise(closest = min(distance))
+
+}
+```
+
+step 2:
+Modify (probably already done in class) so that ... given a state, if creates a dataframe that for each la quinta, it includes distance to nearest dennys.
+
+This function flipped what was done in the map_mindist function from step 1. This function took a state as an input, and output a data frame that listed every LaQuinta's location in a state, and listed the distance to the nearest Denny's from that LaQuinta's.
+```{r create_modified_function}
+step2_mindist <- function(which_state) {
+#step i
+x = which_state
+
+dn_x <- dennys %>%
+filter(state == x)
+
+
+lq_x <- laquinta %>%
+filter(state == x)
+
+lq_dn_x <- full_join(lq_x, dn_x, by = "state") %>%
+mutate(distance = haversine(longitude.x, latitude.x, longitude.y, latitude.y, round = 1))
+
+lq_dn_x_mindist <- lq_dn_x %>%
+group_by(address.x) %>%
+summarise(closest = min(distance)) %>%
+mutate(state = x)
+
+}
+```
+The function also created a new variable for each data frame it outputted that listed which state was the input.
+
+The following chunk was used for testing purposes only and can be disregarded.
+```{r testing}
+lq_dn_tx_mindist <- step2_mindist("TX")
+# View(lq_dn_tx_mindist)
+
+# dn_tx <- dennys %>%
+# filter(state == "TX")
+# nrow(dn_tx)num_den = nrow(dn_x)
+```
+
+
+
+Step 3:
+Grab the dataset (available in moodle in "week of 28 Sep" ) for the 10000 US restaurants.
+
+In this chunk, we are creating a data frame of all the other restaurants.
+```{r create_restaurants_dataframe}
+fas_foo <- read_csv("U:/data Science 241/FastFoodRestaurants.csv")
+fast_food <- fas_foo %>%
+  rename(
+    state = province
+    )
+  
+# View(fast_food)
+
+# for some absolutely incomprehensible reason you have to reload the files window for this to run.
+```
+
+Step 4:
+Create a function that takes a "state" as input and produces a dataframe, where there is one observation per "la quinta" and it lists distance to nearest "Restaurant".
+
+This function creates a data frame with the least distance from every LaQuinta in a state to a random sample of other restaurants. This random sample is of the same size as the number of Denny's in that state
+```{r function_for_step_4}
+step4_mindist <- function(which_state) {
+#step i
+x = which_state
+
+lq_x <- laquinta %>%
+filter(state == x)
+
+fast_food_x <- fast_food %>%
+  filter(state == x) %>%
+  sample_n(nrow(dennys %>% filter(state==x)))
+
+lq_rest_x <- full_join(lq_x, fast_food_x, by = "state") %>%
+mutate(distance = haversine(longitude.x, latitude.x, longitude.y, latitude.y, round = 1))
+
+lq_rest_x_mindist <- lq_rest_x %>%
+group_by(address.x) %>%
+summarise(closest = min(distance)) %>%
+mutate(state = x)
+
+}
+```
+calling the function above to create closest distances to LaQuinta's amongst a random sampling of restaurants.
+
+The following code chunk creates a data frame with the least distance from every LaQuinta in Texas to a random sample of resaurants
+```{r testing_with_texas}
+lq_rest_tx_mindist4 <- step4_mindist("TX")
+# View(lq_dn_tx_mindist)
+
+```
+
+
+Step 5:
+Do some comparative analysis on several states of interest.  
+Are "denny's" any closer than the "other" restaurants?
+
+Summary statistics for other restaurants closest distances
+```{r summary_stats}
+summary(lq_rest_tx_mindist4$closest)
+```
+Summary statistics for dennys closest distances
+```{r summary_stats_2}
+summary(lq_dn_tx_mindist$closest)
+```
+This chunk generates a visual of overlapping histograms of closest distances corresponding to Denny's and the other randomly sampled restaurants.
+```{r histogram_visualization}
+#lq_dn_tx_mindist %>%
+ggplot(lq_dn_tx_mindist,aes(x = closest)) + 
+  #histogram of original data
+  geom_histogram() +
+    geom_histogram(data = lq_rest_tx_mindist4,
+                   colour = "purple",
+                   fill = "yellow", alpha = 0.5) +
+  labs(
+    title = "Histogram Generated From Closest Distances",
+    x = "Closest Distances",
+    y = "Observations"
+  )
+```
+
+Normal distributions are generated from the data shown in the histograms shown above and displayed for comparison. 
+```{r normal_distribution_1}
+#lq_dn_tx_mindist %>%
+ggplot(lq_dn_tx_mindist,aes(x = closest)) + 
+  #histogram of original data
+
+stat_function(fun = dnorm, args = list(mean = mean(lq_dn_tx_mindist$closest), sd = sd(lq_dn_tx_mindist$closest)),color="red") +
+  
+stat_function(fun = dnorm, args = list(mean = mean(lq_rest_tx_mindist4$closest), sd = sd(lq_rest_tx_mindist4$closest)),color="blue") +
+  labs(
+    title = "Normal Distributions Generated From Closest Distances",
+    x = "Closest Distances",
+    y = "Density"
+  )
+```
+The dennys distribution has a higher density of smaller distances whereas the other restaurants have a higher density of higher distances.
+
+
+
+Since the other restaurants are randomly sampled to match the number of dennys in a certain state, the following analysis performs n number of random samplings and averages out the samplings for another comparison. 
+```{r comparison_with_n_samples}
+n_samples <- 500
+averaged_lq_rest_tx_mindist <- step4_mindist("TX") %>% select(closest)
+
+for (i in 1:n_samples){
+  averaged_lq_rest_tx_mindist = cbind(averaged_lq_rest_tx_mindist, step4_mindist("TX") %>% select(closest))
+  
+}
+# averaging all closest distances randomly sampled 
+#averaged_lq_rest_tx_mindist <- rowMeans(averaged_lq_rest_tx_mindist)
+```
+next step in the process
+```{r step_2}
+averaged_lq_rest_tx_mindist$average = rowMeans(averaged_lq_rest_tx_mindist)
+averaged_lq_rest_tx_mindist <- averaged_lq_rest_tx_mindist %>% select(average)
+```
+
+this chunk produces visualization
+```{r create_visualization}
+#lq_dn_tx_mindist %>%
+ggplot(lq_dn_tx_mindist,aes(x = closest)) + 
+  #histogram of original data
+
+stat_function(fun = dnorm, args = list(mean = mean(lq_dn_tx_mindist$closest), sd = sd(lq_dn_tx_mindist$closest)),color="red") +
+  
+stat_function(fun = dnorm, args = list(mean = mean(averaged_lq_rest_tx_mindist$average), sd = sd(averaged_lq_rest_tx_mindist$average)),color="blue") +
+  labs(
+    title = "Normal Distributions Generated From Closest Distances",
+    x = "Closest Distances",
+    y = "Density"
+  )
+```
+
+
+Comparison for New York
+```{r normal_distribution_2}
+#lq_dn_tx_mindist %>%
+ggplot(step2_mindist("NY"),aes(x = closest)) + 
+  #histogram of original data
+
+stat_function(fun = dnorm, args = list(mean = mean(step2_mindist("NY")$closest), sd = sd(step2_mindist("NY")$closest)),color="red") +
+  
+stat_function(fun = dnorm, args = list(mean = mean(step4_mindist("NY")$closest), sd = sd(step4_mindist("NY")$closest)),color="blue") +
+  labs(
+    title = "Normal Distributions Generated From Closest Distances",
+    x = "Closest Distances",
+    y = "Density"
+  )
+```
+To answer the question, are Denny's closer than any other restaurant to LaQuinta, the visualizations for the states of Texas and New York can be observed. It appears that when 500 samples of resaurants in Texas and their distances to LaQuinta's are compared to the distances of Denny's, the Denny's are closer. This conclusion is clear because there is a higher density of Denny's locations at a closer distance.
+However, for the random sample from New York, the Denny's are farther than other restaurants. This conclusion can be made because there is a higher density of smaller distances for other restaurants relative to Denny's
+
+The comparison can be made with any other state using the above code chunk, as long as you with the "NY"s to any other state abbreviation.
